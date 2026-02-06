@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TWITTER RETRO</title>
+    <style>
+        :root {
+            --bg-gray: #c0c0c0;
+            --win-blue: #000080;
+            --border-light: #ffffff;
+            --border-dark: #808080;
+            --border-black: #000000;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background-color: #008080;
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden; /* Evita rebote en iOS */
+        }
+
+        /* Contenedor principal que ocupa toda la pantalla móvil */
+        .window {
+            background: var(--bg-gray);
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            border: 2px solid var(--border-light);
+            box-shadow: inset 1px 1px var(--border-white), 1px 1px 5px #000;
+        }
+
+        .title-bar {
+            background: var(--win-blue);
+            color: white;
+            padding: 8px;
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        /* Área de contenido con scroll para los posts */
+        .content {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        input, textarea {
+            background: #fff;
+            border: 2px inset var(--border-light);
+            padding: 10px;
+            width: 100%;
+            margin-bottom: 10px;
+            font-size: 16px; /* Evita zoom automático en iOS */
+            font-family: 'Courier New', monospace;
+        }
+
+        button {
+            background: var(--bg-gray);
+            border: 2px outset var(--border-light);
+            padding: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            width: 100%;
+            margin-bottom: 5px;
+        }
+
+        button:active { border: 2px inset var(--border-light); }
+
+        .post {
+            background: #fff;
+            border: 2px solid var(--border-dark);
+            padding: 10px;
+            margin-bottom: 15px;
+            color: #000;
+        }
+
+        .post-header { font-size: 11px; color: #555; border-bottom: 1px solid #ccc; margin-bottom: 8px; }
+        
+        .post-actions { 
+            display: flex; 
+            gap: 5px; 
+            margin-top: 10px;
+        }
+        
+        .post-actions button { width: auto; font-size: 12px; padding: 5px; }
+
+        .comment { 
+            margin-left: 10px; 
+            border-left: 2px solid var(--win-blue); 
+            padding-left: 8px; 
+            font-size: 13px; 
+            margin-top: 5px;
+            background: #f0f0f0;
+        }
+
+        .hidden { display: none !important; }
+
+        #user-profile {
+            background: #e0e0e0;
+            padding: 8px;
+            border: 1px solid var(--border-dark);
+            margin-bottom: 10px;
+            font-size: 11px;
+        }
+
+        .logout-btn { background: #ffaaaa; width: auto; float: right; padding: 2px 5px; font-size: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="window">
+    <div class="title-bar">
+        <span>TWITTER_RETRO.EXE</span>
+        <span onclick="cerrarSesion()">[SALIR]</span>
+    </div>
+
+    <div class="content">
+        <div id="auth-screen">
+            <h2 style="text-align:center">LOGIN.SYS</h2>
+            <p style="font-size: 12px; text-align: center;">Ingrese credenciales para continuar</p>
+            <input type="text" id="reg-name" placeholder="USUARIO">
+            <input type="password" id="reg-pass" placeholder="PASSWORD">
+            <button onclick="registrarOEntrar()">ACCEDER AL SISTEMA</button>
+        </div>
+
+        <div id="app-screen" class="hidden">
+            <div id="user-profile"></div>
+
+            <textarea id="post-text" rows="3" placeholder="¿Qué estás pensando?"></textarea>
+            <button onclick="crearPost()">ENVIAR PUBLICACIÓN</button>
+            
+            <hr>
+            <div id="feed"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let usuarioActivo = null;
+    let db = JSON.parse(localStorage.getItem('retro_v2_data')) || { usuarios: {}, posts: [] };
+
+    // AUTO-LOGIN: Revisa si ya estabas logueado al abrir la página
+    window.onload = () => {
+        const sesionPersistente = localStorage.getItem('retro_sesion_activa');
+        if (sesionPersistente && db.usuarios[sesionPersistente]) {
+            usuarioActivo = { name: sesionPersistente, ...db.usuarios[sesionPersistente] };
+            mostrarApp();
+        }
+    };
+
+    function registrarOEntrar() {
+        const name = document.getElementById('reg-name').value.trim().toLowerCase();
+        const pass = document.getElementById('reg-pass').value;
+
+        if (name.length < 3) return alert("Usuario muy corto");
+
+        if (!db.usuarios[name]) {
+            // Registro automático
+            db.usuarios[name] = {
+                password: pass,
+                id: "VERIFIED-" + Math.floor(Math.random() * 89999 + 10000),
+                fecha: new Date().toLocaleDateString()
+            };
+            guardarDB();
+            alert("Cuenta registrada en el sistema.");
+        }
+
+        if (db.usuarios[name].password === pass) {
+            usuarioActivo = { name, ...db.usuarios[name] };
+            localStorage.setItem('retro_sesion_activa', name); // Guardar sesión
+            mostrarApp();
+        } else {
+            alert("Acceso denegado: Password incorrecto.");
+        }
+    }
+
+    function mostrarApp() {
+        document.getElementById('auth-screen').classList.add('hidden');
+        document.getElementById('app-screen').classList.remove('hidden');
+        document.getElementById('user-profile').innerHTML = `
+            <button class="logout-btn" onclick="cerrarSesion()">CERRAR</button>
+            <strong>USER:</strong> ${usuarioActivo.name}<br>
+            <strong>ID:</strong> ${usuarioActivo.id}<br>
+            <strong>DESDE:</strong> ${usuarioActivo.fecha}
+        `;
+        renderizarPosts();
+    }
+
+    function cerrarSesion() {
+        localStorage.removeItem('retro_sesion_activa');
+        location.reload();
+    }
+
+    function crearPost() {
+        const text = document.getElementById('post-text').value;
+        if (!text.trim()) return;
+
+        const nuevoPost = {
+            id: Date.now(),
+            autor: usuarioActivo.name,
+            texto: text,
+            fecha: new Date().toLocaleString(),
+            comentarios: []
+        };
+
+        db.posts.unshift(nuevoPost);
+        guardarDB();
+        document.getElementById('post-text').value = "";
+        renderizarPosts();
+    }
+
+    function eliminarPost(id) {
+        if(confirm("¿Seguro que desea eliminar esta entrada?")) {
+            db.posts = db.posts.filter(p => p.id !== id);
+            guardarDB();
+            renderizarPosts();
+        }
+    }
+
+    function comentarPost(id) {
+        const comentario = prompt("COMENTARIO:");
+        if (comentario) {
+            const post = db.posts.find(p => p.id === id);
+            post.comentarios.push({
+                autor: usuarioActivo.name,
+                texto: comentario
+            });
+            guardarDB();
+            renderizarPosts();
+        }
+    }
+
+    function renderizarPosts() {
+        const feed = document.getElementById('feed');
+        feed.innerHTML = "";
+
+        db.posts.forEach(post => {
+            const esDueño = post.autor === usuarioActivo.name;
+            let comentariosHTML = post.comentarios.map(c => `
+                <div class="comment"><strong>${c.autor}:</strong> ${c.texto}</div>
+            `).join('');
+
+            feed.innerHTML += `
+                <div class="post">
+                    <div class="post-header">${post.autor} @ ${post.fecha}</div>
+                    <div style="word-wrap: break-word;">${post.texto}</div>
+                    <div class="post-actions">
+                        <button onclick="comentarPost(${post.id})">COMENTAR</button>
+                        ${esDueño ? `<button style="color:red" onclick="eliminarPost(${post.id})">BORRAR</button>` : ''}
+                    </div>
+                    <div>${comentariosHTML}</div>
+                </div>
+            `;
+        });
+    }
+
+    function guardarDB() {
+        localStorage.setItem('retro_v2_data', JSON.stringify(db));
+    }
+</script>
+
+</body>
+</html>
